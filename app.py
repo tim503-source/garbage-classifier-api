@@ -2,17 +2,24 @@ from flask import Flask, request, jsonify
 import numpy as np
 from PIL import Image
 import os
-import tflite_runtime.interpreter as tflite
+import tensorflow as tf
 
 app = Flask(__name__)
 
-# Load TFLite model (Drastically lighter than full TensorFlow for Render Free Tier)
+# Load TFLite model via TensorFlow (More stable on Render)
 MODEL_PATH = "garbage_classifier.tflite"
-interpreter = tflite.Interpreter(model_path=MODEL_PATH)
-interpreter.allocate_tensors()
 
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+try:
+    print(f"Loading model from {MODEL_PATH}...")
+    interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    print("✅ Model loaded successfully!")
+except Exception as e:
+    print(f"❌ Error loading model: {e}")
+    interpreter = None
+
 
 # Match your training labels
 classes = ["Biodegradable", "Non-biodegradable", "Recyclable"]
@@ -44,6 +51,9 @@ def predict():
         processed = preprocess(image)
 
         # TFLite Inference
+        if interpreter is None:
+            return jsonify({"error": "Model not loaded on server."}), 500
+
         interpreter.set_tensor(input_details[0]['index'], processed)
         interpreter.invoke()
         prediction = interpreter.get_tensor(output_details[0]['index'])
